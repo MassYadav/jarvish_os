@@ -21,7 +21,7 @@ class Vault:
     def __init__(self):
         if settings.ENVIRONMENT == "production" and settings.VAULT_MASTER_KEY == b"0123456789abcdef0123456789abcdef":
             raise ValueError("CRITICAL: Default Vault Master Key detected in production.")
-        self.aesgcm = AESGCM(settings.VAULT_MASTER_KEY)
+        self.aesgcm = AESGCM(settings.VAULT_MASTER_KEY.encode('utf-8'))
 
     def _encrypt_sync(self, plaintext: str, user_id: str, service_name: str) -> tuple[bytes, bytes]:
         nonce = os.urandom(12)
