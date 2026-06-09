@@ -13,6 +13,27 @@ export default function ChatInterface() {
   
   const { startTask, setTaskId, updateStatus, setRiskScore, setFinalResult, status, taskId } = useTaskStore();
 
+  const formatTaskResult = (resultPayload: unknown) => {
+    if (typeof resultPayload === "string") {
+      return resultPayload.trim() || "Execution complete.";
+    }
+
+    if (resultPayload && typeof resultPayload === "object") {
+      const payload = resultPayload as Record<string, unknown>;
+      if (typeof payload.output === "string" && payload.output.trim()) {
+        return payload.output;
+      }
+
+      if (typeof payload.message === "string" && payload.message.trim()) {
+        return payload.message;
+      }
+
+      return "Execution complete.";
+    }
+
+    return "Execution complete.";
+  };
+
   // POLLING ENGINE: Checks the database every 2 seconds while a task is running
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -26,8 +47,9 @@ export default function ChatInterface() {
             updateStatus('PENDING_APPROVAL');
           } else if (data.status === 'COMPLETED' || data.status === 'FAILED') {
             updateStatus(data.status);
-            setFinalResult(data.result_payload || "Execution complete.");
-            setMessages(prev => [...prev, { role: "system", content: data.result_payload }]);
+            const finalMessage = formatTaskResult(data.result_payload);
+            setFinalResult(finalMessage);
+            setMessages(prev => [...prev, { role: "system", content: finalMessage }]);
           }
         } catch (error) {
           console.error("Polling error:", error);

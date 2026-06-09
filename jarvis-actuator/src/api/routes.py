@@ -1,161 +1,139 @@
-from __future__ import annotations
+import uuid
+import asyncio
+from typing import Dict, Any, Optional
+from fastapi import APIRouter, Request, HTTPException, Depends, status
+from pydantic import BaseModel
 
-from fastapi import APIRouter, Body, HTTPException, Query
-from pydantic import BaseModel, Field
+from src.core.security import verify_signature, is_command_safe
+from src.tools.base import ToolRequest, ExecutionResult
+from src.runtime.executor import execute_command
 
-from src.controllers.actuator_controller import (
-    ActuatorControllerError,
-    actuator_controller,
-)
-from src.models.schemas import (
-    ActionContext,
-    ActionResponse,
-    HealthResponse,
-    KeyboardHotkeyRequest,
-    KeyboardTypeRequest,
-    MouseClickRequest,
-    MouseMoveRequest,
-    ProcessLaunchRequest,
-    Region,
-    ScreenshotCaptureRequest,
-    ScreenshotMode,
-    ScreenshotResponse,
-    WindowFocusRequest,
-    WindowListResponse,
-)
+# Initialize the router
+router = APIRouter(prefix="/api/v1", tags=["Execution"])
 
-router = APIRouter(prefix="/actuator", tags=["actuator"])
+# In-memory state tracking for active and completed tasks
+# In a distributed production system this would use Redis, but for a local OS daemon, memory is optimal.
+ACTIVE_TASKS: Dict[str, asyncio.Task] = {}
+TASK_RESULTS: Dict[str, ExecutionResult] = {}
 
 
-class WindowListRequest(BaseModel):
-    context: ActionContext = Field(default_factory=ActionContext)
-
-
-@router.post("/window/focus", response_model=ActionResponse)
-def focus_window(request: WindowFocusRequest) -> ActionResponse:
-    try:
-        return actuator_controller.focus_window(request)
-    except ActuatorControllerError as exc:
-        raise _controller_http_error(exc) from exc
-
-
-@router.post("/window/list", response_model=WindowListResponse)
-def list_windows(
-    request: WindowListRequest | None = Body(default=None),
-) -> WindowListResponse:
-    try:
-        context = request.context if request else ActionContext()
-        return actuator_controller.list_windows(context)
-    except ActuatorControllerError as exc:
-        raise _controller_http_error(exc) from exc
-
-
-@router.post("/mouse/click", response_model=ActionResponse)
-def click_mouse(request: MouseClickRequest) -> ActionResponse:
-    try:
-        return actuator_controller.click_mouse(request)
-    except ActuatorControllerError as exc:
-        raise _controller_http_error(exc) from exc
-
-
-@router.post("/mouse/move", response_model=ActionResponse)
-def move_mouse(request: MouseMoveRequest) -> ActionResponse:
-    try:
-        return actuator_controller.move_mouse(request)
-    except ActuatorControllerError as exc:
-        raise _controller_http_error(exc) from exc
-
-
-@router.post("/keyboard/type", response_model=ActionResponse)
-def type_text(request: KeyboardTypeRequest) -> ActionResponse:
-    try:
-        return actuator_controller.type_text(request)
-    except ActuatorControllerError as exc:
-        raise _controller_http_error(exc) from exc
-
-
-@router.post("/keyboard/hotkey", response_model=ActionResponse)
-def press_hotkey(request: KeyboardHotkeyRequest) -> ActionResponse:
-    try:
-        return actuator_controller.press_hotkey(request)
-    except ActuatorControllerError as exc:
-        raise _controller_http_error(exc) from exc
-
-
-@router.post("/process/launch", response_model=ActionResponse)
-def launch_application(request: ProcessLaunchRequest) -> ActionResponse:
-    try:
-        return actuator_controller.launch_application(request)
-    except ActuatorControllerError as exc:
-        raise _controller_http_error(exc) from exc
-
-
-@router.get("/screenshot", response_model=ScreenshotResponse)
-def capture_screenshot(
-    mode: ScreenshotMode = Query(default=ScreenshotMode.FULL),
-    persist: bool = Query(default=True),
-    x: int | None = Query(default=None, ge=0),
-    y: int | None = Query(default=None, ge=0),
-    width: int | None = Query(default=None, gt=0),
-    height: int | None = Query(default=None, gt=0),
-    execution_id: str | None = Query(default=None, min_length=1, max_length=128),
-    requested_by: str = Query(default="jarvis", min_length=1, max_length=128),
-    source: str = Query(default="langgraph", min_length=1, max_length=128),
-    risk_score: int = Query(default=0, ge=0, le=100),
-    requires_approval: bool = Query(default=False),
-    audit_tags: list[str] | None = Query(default=None),
-) -> ScreenshotResponse:
-    context_payload = {
-        "requested_by": requested_by,
-        "source": source,
-        "risk_score": risk_score,
-        "requires_approval": requires_approval,
-        "audit_tags": audit_tags or [],
-    }
-    if execution_id:
-        context_payload["execution_id"] = execution_id
-
-    region = _build_region(mode=mode, x=x, y=y, width=width, height=height)
-    request = ScreenshotCaptureRequest(
-        mode=mode,
-        region=region,
-        persist=persist,
-        context=ActionContext(**context_payload),
-    )
-
-    try:
-        return actuator_controller.capture_screenshot(request)
-    except ActuatorControllerError as exc:
-        raise _controller_http_error(exc) from exc
-
-
-@router.get("/health", response_model=HealthResponse)
-def health() -> HealthResponse:
-    return actuator_controller.health()
-
-
-def _build_region(
-    *,
-    mode: ScreenshotMode,
-    x: int | None,
-    y: int | None,
-    width: int | None,
-    height: int | None,
-) -> Region | None:
-    if mode != ScreenshotMode.REGION:
-        return None
-
-    if x is None or y is None or width is None or height is None:
+# --- Dependency for Cryptographic Security ---
+async def verify_hmac(request: Request):
+    """
+    FastAPI dependency to enforce HMAC SHA-256 zero-trust validation.
+    Reads the raw request body before Pydantic parsing occurs.
+    """
+    signature = request.headers.get("X-Jarvis-Signature")
+    if not signature:
         raise HTTPException(
-            status_code=400,
-            detail="Region screenshots require x, y, width, and height query parameters",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing X-Jarvis-Signature header."
+        )
+        
+    body_bytes = await request.body()
+    if not verify_signature(body_bytes, signature):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Cryptographic signature verification failed."
         )
 
-    return Region(x=x, y=y, width=width, height=height)
+
+# --- Background Worker ---
+async def background_task_runner(task_id: str, tool_request: ToolRequest):
+    """Executes the tool in the background and stores the result upon completion."""
+    try:
+        # Currently, we only support system shell commands.
+        # Future phases will route to browser/desktop tools based on tool_request.tool_name.
+        if tool_request.tool_name == "system_shell":
+            command = tool_request.parameters.get("command", [])
+            
+            # Final AST safety check before execution
+            if not is_command_safe(command):
+                TASK_RESULTS[task_id] = ExecutionResult(
+                    success=False,
+                    output="",
+                    error="Command rejected by AST sanitizer. Unsafe shell syntax detected.",
+                    runtime_ms=0.0
+                )
+                return
+
+            # Execute the isolated command
+            result = await execute_command(command, tool_request.timeout_override)
+            TASK_RESULTS[task_id] = result
+        else:
+            TASK_RESULTS[task_id] = ExecutionResult(
+                success=False,
+                output="",
+                error=f"Unsupported tool: {tool_request.tool_name}",
+                runtime_ms=0.0
+            )
+    except asyncio.CancelledError:
+        # Handle manual aborts gracefully
+        TASK_RESULTS[task_id] = ExecutionResult(
+            success=False,
+            output="",
+            error="Execution was manually aborted by the orchestrator.",
+            runtime_ms=0.0
+        )
+    finally:
+        # Clean up the task reference
+        if task_id in ACTIVE_TASKS:
+            del ACTIVE_TASKS[task_id]
 
 
-def _controller_http_error(exc: ActuatorControllerError) -> HTTPException:
-    return HTTPException(
-        status_code=exc.status_code,
-        detail={"message": str(exc), "audit_id": exc.audit_id},
-    )
+# --- API Models ---
+class TaskResponse(BaseModel):
+    task_id: str
+    status: str
+
+class TaskStatusResponse(BaseModel):
+    task_id: str
+    status: str
+    result: Optional[ExecutionResult] = None
+
+
+# --- Endpoints ---
+@router.post("/execute", response_model=TaskResponse, dependencies=[Depends(verify_hmac)])
+async def execute_tool(request: ToolRequest):
+    """
+    Ingests a signed tool payload, spawns a background worker, and returns a tracking ID.
+    """
+    task_id = str(uuid.uuid4())
+    
+    # Create and store the background task
+    task = asyncio.create_task(background_task_runner(task_id, request))
+    ACTIVE_TASKS[task_id] = task
+    
+    return TaskResponse(task_id=task_id, status="pending")
+
+
+@router.get("/tasks/{task_id}/status", response_model=TaskStatusResponse)
+async def get_task_status(task_id: str):
+    """
+    Polls the status of an execution. Does not require HMAC since it only reads state, 
+    but relies on the unpredictability of the UUID.
+    """
+    if task_id in TASK_RESULTS:
+        return TaskStatusResponse(task_id=task_id, status="completed", result=TASK_RESULTS[task_id])
+        
+    if task_id in ACTIVE_TASKS:
+        return TaskStatusResponse(task_id=task_id, status="running")
+        
+    raise HTTPException(status_code=404, detail="Task ID not found.")
+
+
+@router.post("/tasks/{task_id}/abort", response_model=TaskResponse, dependencies=[Depends(verify_hmac)])
+async def abort_task(task_id: str):
+    """
+    Forces the termination of a running task. 
+    Requires HMAC signature as this is a destructive operation.
+    """
+    if task_id in ACTIVE_TASKS:
+        # Send the cancellation signal
+        ACTIVE_TASKS[task_id].cancel()
+        return TaskResponse(task_id=task_id, status="aborting")
+        
+    if task_id in TASK_RESULTS:
+        raise HTTPException(status_code=400, detail="Task has already completed.")
+        
+    raise HTTPException(status_code=404, detail="Task ID not found.")

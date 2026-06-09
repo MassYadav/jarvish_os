@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import List, Dict
 
 # The unbreakable boundary of the Desktop Agent
-WORKSPACE_ROOT = Path(os.getenv("JARVIS_WORKSPACE", r"C:\Users\mass0\OneDrive\Desktop\jarvish_os\jarvis_workspace")).resolve()
+WORKSPACE_ROOT = Path(os.getenv("JARVIS_WORKSPACE", str(Path.home() / "jarvis_workspace"))).resolve()
 
 def _get_safe_path(requested_path: str) -> Path:
     """Security Gate: Guarantees the path cannot escape the workspace root."""

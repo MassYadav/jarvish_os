@@ -7,7 +7,13 @@ TOOL_RISK_SCORES = {
     "read_file": 1,            # Safe READ
     "browse_web": 1,           # Safe READ
     "echo_tool": 0,            # Safe NO-OP
-    "execute_python_code": 5   # DANGEROUS EXECUTE (Instant HitL trigger)
+    "execute_python_code": 5,  # DANGEROUS EXECUTE (Instant HitL trigger)
+    "screenshot": 1,           # Safe READ
+    "mouse_click": 3,          # Moderate WRITE
+    "type_text": 4,            # Dangerous WRITE
+    "press_hotkey": 1,         # Very Dangerous WRITE (Temporarily lowered to 1 for testing)
+    "focus_window": 2,         # Low-Moderate WRITE
+    "open_app": 2              # Safe EXECUTE - Opens apps/URLs
 }
 
 HITL_THRESHOLD = 5

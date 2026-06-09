@@ -1,21 +1,57 @@
 "use client";
 
+import { useState } from "react";
 import { useTaskStore } from "@/store/useTaskStore";
 import { ShieldAlert, Check, X } from "lucide-react";
 
-export default function HitLModal() {
-  const { status, riskScore, updateStatus } = useTaskStore();
+export default function HitLModal({ onClose }: { onClose?: () => void }) {
+  const { taskId, status, riskScore, updateStatus } = useTaskStore();
+  const [isLoading, setIsLoading] = useState(false);
 
   if (status !== 'PENDING_APPROVAL') return null;
 
-  const handleApprove = () => {
-    // For now, we just bypass it locally. 
-    // In V2, this will send a POST /tasks/{id}/approve to FastAPI
-    updateStatus('COMPLETED');
+  const handleApprove = async () => {
+    if (!taskId) return;
+
+    setIsLoading(true);
+    try {
+      const response = await fetch(`http://localhost:8000/tasks/${taskId}/approve`, {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        console.log("Task approved, Brain resuming...");
+        onClose?.();
+      } else {
+        console.error("Failed to approve task");
+      }
+    } catch (error) {
+      console.error("Failed to approve:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleDeny = () => {
-    updateStatus('FAILED');
+  const handleDeny = async () => {
+    if (!taskId) return;
+
+    setIsLoading(true);
+    try {
+      const response = await fetch(`http://localhost:8000/tasks/${taskId}/deny`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        throw new Error('Deny request failed');
+      }
+
+      updateStatus('FAILED');
+    } catch (error) {
+      console.error(error);
+      updateStatus('FAILED');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -50,15 +86,17 @@ export default function HitLModal() {
         <div className="p-4 bg-slate-950 border-t border-slate-800 flex gap-3 justify-end">
           <button 
             onClick={handleDeny}
-            className="px-4 py-2 rounded-lg font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors flex items-center gap-2"
+            disabled={isLoading}
+            className="px-4 py-2 rounded-lg font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <X size={16} /> Abort Task
+            <X size={16} /> {isLoading ? 'Processing...' : 'Abort Task'}
           </button>
           <button 
             onClick={handleApprove}
-            className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2 shadow-lg shadow-amber-600/20"
+            disabled={isLoading}
+            className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2 shadow-lg shadow-amber-600/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <Check size={16} /> Authorize Execution
+            <Check size={16} /> {isLoading ? 'Processing...' : 'Authorize Execution'}
           </button>
         </div>
       </div>

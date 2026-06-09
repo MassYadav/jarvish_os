@@ -105,3 +105,48 @@ def get_task(task_id: str):
             "risk_score": row[1] if row[1] is not None else 0,
             "result_payload": row[2] if row[2] is not None else ""
         }
+
+@app.post("/tasks/{task_id}/approve")
+async def approve_task(task_id: str):
+    with sync_engine.connect() as conn:
+        conn.execute(text("""
+            UPDATE agent_tasks 
+            SET status = 'QUEUED'
+            WHERE task_id = :tid
+        """), {"tid": task_id})
+        conn.commit()
+
+    # CRITICAL: Sending 'None' for intent triggers a LangGraph thread resume
+    payload = json.dumps({
+        "task_id": task_id,
+        "user_id": "user_123",
+        "intent": None, 
+        "api_keys": {}
+    })
+    sync_redis.rpush("jarvis_execution_queue", payload)
+
+    return {"status": "approved"}
+
+@app.post("/tasks/{task_id}/deny")
+def deny_task(task_id: str):
+    """
+    HITL Denial Endpoint: Reject a task pending human approval.
+    Updates status to FAILED.
+    """
+    from fastapi import HTTPException
+    
+    try:
+        # Update task status to FAILED
+        with sync_engine.connect() as conn:
+            conn.execute(text("""
+                UPDATE agent_tasks 
+                SET status = 'FAILED'
+                WHERE task_id = :tid
+            """), {"tid": task_id})
+            conn.commit()
+        
+        logger.info("task_denied", task_id=task_id)
+        return {"task_id": task_id, "status": "FAILED", "message": "Task denied by human"}
+    except Exception as e:
+        logger.error("task_denial_failed", task_id=task_id, error=str(e))
+        raise HTTPException(status_code=500, detail=f"Denial failed: {str(e)}")

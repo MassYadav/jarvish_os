@@ -4,7 +4,7 @@ from pathlib import Path
 from src.core.logger import logger
 
 # Align with Phase 3A workspace
-WORKSPACE_ROOT = Path(os.getenv("JARVIS_WORKSPACE", r"C:\Users\mass0\OneDrive\Desktop\jarvish_os\jarvis_workspace")).resolve()
+WORKSPACE_ROOT = Path(os.getenv("JARVIS_WORKSPACE", str(Path.home() / "jarvis_workspace"))).resolve()
 
 def execute_python_code(code: str) -> str:
     """
