@@ -13,7 +13,16 @@ TOOL_RISK_SCORES = {
     "type_text": 4,            # Dangerous WRITE
     "press_hotkey": 1,         # Very Dangerous WRITE (Temporarily lowered to 1 for testing)
     "focus_window": 2,         # Low-Moderate WRITE
-    "open_app": 2              # Safe EXECUTE - Opens apps/URLs
+    "open_app": 2,             # Safe EXECUTE - Opens apps/URLs
+
+    # Structural Browser Agent (Playwright DOM)
+    "browser_navigate":    1,  # Safe READ — opens a URL
+    "browser_click":       3,  # Moderate WRITE — clicks elements
+    "browser_type":        4,  # Dangerous WRITE — keystroke injection
+    "browser_scrape_text": 1,  # Safe READ — text extraction
+
+    # Dual-Core Orchestrator (VLM escalation is auto-triggered, not user-planned)
+    "vision_escalation":   2,  # Moderate — VLM daemon takes over screen control
 }
 
 HITL_THRESHOLD = 5

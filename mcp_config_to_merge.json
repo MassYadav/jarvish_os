@@ -1,0 +1,46 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "C:\\Users\\mass0\\OneDrive\\Desktop\\jarvish_os"
+      ]
+    },
+    "postgres": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-postgres-server"
+      ],
+      "env": {
+        "DATABASE_URL": "postgresql://jarvis:jarvis_password@localhost:5433/jarvis_os"
+      }
+    },
+    "redis": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-redis"
+      ],
+      "env": {
+        "REDIS_URL": "redis://localhost:6380/0"
+      }
+    },
+    "fetch": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-server-fetch"
+      ]
+    },
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ]
+    }
+  }
+}

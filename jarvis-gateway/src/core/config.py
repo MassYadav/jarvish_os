@@ -5,7 +5,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     
     # Phase 5 Addition: Redis Queue
-    REDIS_URL: str = "redis://localhost:6379/0" 
+    REDIS_URL: str = "redis://localhost:6380/0" 
     
     # Phase 1 Restored: Security & Auth Keys
     ENVIRONMENT: str = "development"

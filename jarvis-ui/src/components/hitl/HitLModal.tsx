@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useTaskStore } from "@/store/useTaskStore";
+import { api } from "@/lib/api"; // Importing our centralized API
 import { ShieldAlert, Check, X } from "lucide-react";
 
 export default function HitLModal({ onClose }: { onClose?: () => void }) {
@@ -12,19 +13,17 @@ export default function HitLModal({ onClose }: { onClose?: () => void }) {
 
   const handleApprove = async () => {
     if (!taskId) return;
-
     setIsLoading(true);
+    
     try {
-      const response = await fetch(`http://localhost:8000/tasks/${taskId}/approve`, {
-        method: 'POST',
-      });
-
-      if (response.ok) {
-        console.log("Task approved, Brain resuming...");
-        onClose?.();
-      } else {
-        console.error("Failed to approve task");
-      }
+      await api.approveTask(taskId);
+      console.log("Task approved, Brain resuming...");
+      
+      // CRITICAL FIX: Instantly tell the UI the task is running again
+      // This will automatically unmount the modal.
+      updateStatus('RUNNING'); 
+      onClose?.();
+      
     } catch (error) {
       console.error("Failed to approve:", error);
     } finally {
@@ -34,20 +33,18 @@ export default function HitLModal({ onClose }: { onClose?: () => void }) {
 
   const handleDeny = async () => {
     if (!taskId) return;
-
     setIsLoading(true);
+    
     try {
-      const response = await fetch(`http://localhost:8000/tasks/${taskId}/deny`, {
-        method: 'POST',
-      });
-
-      if (!response.ok) {
-        throw new Error('Deny request failed');
-      }
-
+      await api.denyTask(taskId);
+      console.log("Task aborted by user.");
+      
+      // Tell the UI the task was killed
       updateStatus('FAILED');
+      onClose?.();
+      
     } catch (error) {
-      console.error(error);
+      console.error("Failed to deny:", error);
       updateStatus('FAILED');
     } finally {
       setIsLoading(false);

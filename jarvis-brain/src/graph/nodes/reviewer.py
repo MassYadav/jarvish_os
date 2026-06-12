@@ -31,6 +31,10 @@ def has_cycle(plan: DAGPlan) -> bool:
     return visited != len(plan.nodes)
 
 def review_node(state: AgentState) -> Dict[str, Any]:
+    if state.get("hitl_approved"):
+        logger.info("review_bypassed_due_to_prior_approval", task_id=state["task_id"])
+        return {"is_valid": True, "requires_hitl": False}
+        
     logger.info("reviewing_plan", task_id=state["task_id"])
     plan = state.get("dag_plan")
     

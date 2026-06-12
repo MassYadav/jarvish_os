@@ -1,0 +1,22 @@
+{
+  "personal_info": {
+    "name": "Mass Yadav",
+    "phone": "+1-555-0199",
+    "address": "123 Innovation Drive, Tech City, TX 78701",
+    "gender": "Male"
+  },
+  "professional_history": {
+    "experience_level": "Senior",
+    "target_roles": [
+      "Principal AI Systems Architect",
+      "Principal Multimodal Engineer",
+      "Senior Staff AI Engineer"
+    ],
+    "availability": "Immediate, Open to Relocation"
+  },
+  "cover_letter_matrices": {
+    "agile_startup": "I thrive in high-velocity environments where rapid iteration and shipping code are the primary metrics. I bring a founder's mentality to scaling architecture, focusing on eliminating tech debt while delivering core value on day one.",
+    "enterprise_scale": "I specialize in designing fault-tolerant, high-concurrency enterprise systems. My experience with distributed state machines and asynchronous processing ensures zero-latency performance under extreme loads across global regions.",
+    "ai_research_lab": "My passion lies at the intersection of applied machine learning and scalable engineering. I excel at converting theoretical multimodal vision/language models into production-grade orchestration pipelines."
+  }
+}

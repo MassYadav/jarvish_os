@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     # Dynamic LLM Defaults
     OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "llama3")
-    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama3-8b-8192")
+    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 
 settings = Settings()

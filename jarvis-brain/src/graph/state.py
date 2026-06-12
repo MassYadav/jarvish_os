@@ -18,6 +18,11 @@ class AgentState(TypedDict):
     retry_count: int
     is_valid: bool
     
+    # Universal Clarification Engine State
+    waiting_for_user: bool
+    user_clarification_response: Optional[str]
+    clarification_question: Optional[str]
+    
     # Execution Budget (NEW FIX)
     max_steps: int
     tool_calls_used: int
@@ -26,12 +31,23 @@ class AgentState(TypedDict):
     # Security State
     risk_score: int
     requires_hitl: bool
+    hitl_approved: bool
     
     # Final Output
     final_result: str
+    browser_context: str
     
     # BYOAK Engine State
     api_keys: Dict[str, str]
     # Annotated so failovers stack gracefully
     failed_providers: Annotated[List[str], operator.add] 
     active_provider: str
+    active_model: str  # Specific model name selected by user (e.g. "llama-3.1-70b-versatile")
+    # Raw execution config block forwarded from the Gateway
+    execution_config: Dict[str, str]
+    # Set to True when Ollama local fallback is engaged — surfaced as a frontend performance warning
+    slow_model_active: bool
+
+    # Dual-Core Orchestrator State
+    vision_escalation_active: bool   # True when the VLM Computer Use Daemon is handling the task
+    vision_telemetry: List[Dict]     # Accumulates live telemetry frames from the VLM daemon
